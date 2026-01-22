@@ -36,13 +36,22 @@ public class LoadTestDemo {
         for (int i = 1; i <= 1000; i++) {
             JsonObject job = new JsonObject();
             
-            // Mix of job types
-            String type = switch (i % 4) {
-                case 0 -> "email";
-                case 1 -> "process_data";
-                case 2 -> "generate_report";
-                default -> "generic";
-            };
+            // Mix of job types - FIXED: Traditional switch statement
+            String type;
+            switch (i % 4) {
+                case 0:
+                    type = "email";
+                    break;
+                case 1:
+                    type = "process_data";
+                    break;
+                case 2:
+                    type = "generate_report";
+                    break;
+                default:
+                    type = "generic";
+                    break;
+            }
             
             job.addProperty("type", type);
             job.addProperty("id", "job-" + i);

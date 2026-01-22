@@ -4,11 +4,11 @@ import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 public class MultiWorkerDemo {
     private static final Logger logger = LoggerFactory.getLogger(MultiWorkerDemo.class);
@@ -94,7 +94,7 @@ public class MultiWorkerDemo {
         
         // Get completion stats from database
         try {
-            var stats = getJobStats();
+            int[] stats = getJobStats();
             logger.info("Total jobs processed: {}", stats[0]);
             logger.info("Successful completions: {}", stats[1]);
             logger.info("Failed jobs: {}", stats[2]);
@@ -115,9 +115,9 @@ public class MultiWorkerDemo {
                      "(SELECT COUNT(*) FROM jobs WHERE status = 'failed') as failed, " +
                      "(SELECT COUNT(*) FROM jobs WHERE status = 'pending') as pending";
         
-        try (var conn = DatabaseManager.getConnection();
-             var stmt = conn.prepareStatement(sql);
-             var rs = stmt.executeQuery()) {
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
             
             if (rs.next()) {
                 return new int[]{

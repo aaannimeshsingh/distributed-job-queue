@@ -18,13 +18,11 @@ public class JobConsumer {
     private final JobMetrics metrics;
     private volatile boolean running = true;
 
-    // Constructor with metrics
     public JobConsumer(String workerId, JobMetrics metrics) {
         this.workerId = workerId;
         this.metrics = metrics;
     }
 
-    // Constructor without metrics (backward compatibility)
     public JobConsumer(String workerId) {
         this.workerId = workerId;
         this.metrics = null;
@@ -76,9 +74,6 @@ public class JobConsumer {
         return null;
     }
 
-    /**
-     * Mark job as processing
-     */
     private void markJobProcessing(Long jobId) throws SQLException {
         String sql = "UPDATE jobs SET status = 'processing', started_at = ?, attempts = attempts + 1 " +
                      "WHERE id = ?";
@@ -92,9 +87,6 @@ public class JobConsumer {
         }
     }
 
-    /**
-     * Mark job as completed
-     */
     private void markJobCompleted(Long jobId) throws SQLException {
         String sql = "UPDATE jobs SET status = 'completed', completed_at = ? WHERE id = ?";
 
@@ -107,9 +99,6 @@ public class JobConsumer {
         }
     }
 
-    /**
-     * Mark job as failed
-     */
     private void markJobFailed(Long jobId, String error, boolean canRetry) throws SQLException {
         String sql;
         if (canRetry) {
@@ -133,51 +122,89 @@ public class JobConsumer {
     }
 
     /**
-     * Process a single job
-     * This is where your actual business logic goes
+     * Process a single job using domain-specific processors
      */
     private void processJob(Job job) throws Exception {
-        logger.info("[{}] Processing job: ID={}, Payload={}", workerId, job.getId(), job.getPayload());
+        logger.info("[{}] Processing job: ID={}, Type={}, Payload={}", 
+                   workerId, job.getId(), job.getJobType(), job.getPayload());
 
-        // BUSINESS LOGIC GOES HERE
-        // For demo, we'll simulate different job types
         JsonObject payload = job.getPayload();
-        String jobType = payload.has("type") ? payload.get("type").getAsString() : "unknown";
+        JobType jobType = job.getJobType();
 
+        // Route to appropriate domain processor
         switch (jobType) {
-            case "email":
-                // Simulate sending email
+            // Financial domain
+            case TRADE_SETTLEMENT:
+                DomainJobProcessors.processTradeSettlement(workerId, payload);
+                break;
+            case RISK_CALCULATION:
+                DomainJobProcessors.processRiskCalculation(workerId, payload);
+                break;
+            case FRAUD_DETECTION:
+                DomainJobProcessors.processFraudDetection(workerId, payload);
+                break;
+            case REGULATORY_REPORT:
+                DomainJobProcessors.processRegulatoryReport(workerId, payload);
+                break;
+                
+            // Hardware domain
+            case RTL_SYNTHESIS:
+                DomainJobProcessors.processRTLSynthesis(workerId, payload);
+                break;
+            case TIMING_ANALYSIS:
+                DomainJobProcessors.processTimingAnalysis(workerId, payload);
+                break;
+            case POWER_ANALYSIS:
+                DomainJobProcessors.processPowerAnalysis(workerId, payload);
+                break;
+            case PLACE_AND_ROUTE:
+                DomainJobProcessors.processPlaceAndRoute(workerId, payload);
+                break;
+            case DRC_CHECK:
+                DomainJobProcessors.processDRCCheck(workerId, payload);
+                break;
+                
+            // Security domain
+            case VULNERABILITY_SCAN:
+                DomainJobProcessors.processVulnerabilityScan(workerId, payload);
+                break;
+            case LOG_ANALYSIS:
+                DomainJobProcessors.processLogAnalysis(workerId, payload);
+                break;
+            case THREAT_DETECTION:
+                DomainJobProcessors.processThreatDetection(workerId, payload);
+                break;
+            case COMPLIANCE_CHECK:
+                DomainJobProcessors.processComplianceCheck(workerId, payload);
+                break;
+            case INCIDENT_RESPONSE:
+                DomainJobProcessors.processIncidentResponse(workerId, payload);
+                break;
+                
+            // Legacy support
+            case EMAIL:
                 Thread.sleep(100);
                 if (payload.has("recipient")) {
                     logger.info("[{}] Email sent to: {}", workerId, payload.get("recipient").getAsString());
                 }
                 break;
-            
-            case "process_data":
-                // Simulate data processing
+            case PROCESS_DATA:
                 Thread.sleep(150);
                 if (payload.has("data")) {
                     logger.info("[{}] Processed data: {}", workerId, payload.get("data"));
                 }
                 break;
-            
-            case "generate_report":
-                // Simulate report generation
+            case GENERATE_REPORT:
                 Thread.sleep(200);
                 if (payload.has("reportName")) {
                     logger.info("[{}] Generated report: {}", workerId, payload.get("reportName").getAsString());
                 }
                 break;
-            
-            case "generic":
-                // Generic job
-                Thread.sleep(50);
+            case GENERIC:
+            default:
+                Thread.sleep(100);
                 logger.info("[{}] Processed generic job", workerId);
                 break;
-            
-            default:
-                logger.info("[{}] Processing unknown job type", workerId);
-                Thread.sleep(100);
         }
     }
 
@@ -185,22 +212,19 @@ public class JobConsumer {
      * Start consuming jobs
      */
     public void start() {
-        logger.info("[{}] Consumer started", workerId);
+        logger.info("[{}] Consumer started (Domain: ALL)", workerId);
 
         while (running) {
             try {
                 Job job = fetchNextJob();
                 
                 if (job == null) {
-                    // No jobs available, wait before polling again
                     Thread.sleep(1000);
                     continue;
                 }
 
-                // Mark as processing
                 markJobProcessing(job.getId());
                 
-                // Track metrics if available
                 if (metrics != null) {
                     metrics.recordJobStart();
                 }
@@ -208,30 +232,25 @@ public class JobConsumer {
                 long startTime = System.currentTimeMillis();
 
                 try {
-                    // Process the job
                     processJob(job);
                     
                     long processingTime = System.currentTimeMillis() - startTime;
-                    
-                    // Mark as completed
                     markJobCompleted(job.getId());
                     
-                    // Track success metrics
                     if (metrics != null) {
                         metrics.recordJobSuccess(processingTime);
                     }
                     
-                    logger.info("[{}] Job completed: ID={} in {}ms", workerId, job.getId(), processingTime);
+                    logger.info("[{}] ✓ Job completed: ID={}, Type={} in {}ms", 
+                               workerId, job.getId(), job.getJobType(), processingTime);
                     
                 } catch (Exception e) {
-                    // Job failed
-                    logger.error("[{}] Job failed: ID={}", workerId, job.getId(), e);
+                    logger.error("[{}] ✗ Job failed: ID={}, Type={}", 
+                                workerId, job.getId(), job.getJobType(), e);
                     
-                    // Check if we can retry
                     boolean canRetry = job.getAttempts() + 1 < job.getMaxAttempts();
                     markJobFailed(job.getId(), e.getMessage(), canRetry);
                     
-                    // Track failure metrics
                     if (metrics != null) {
                         metrics.recordJobFailure();
                     }
@@ -257,7 +276,7 @@ public class JobConsumer {
     }
 
     /**
-     * Stop the consumer
+     * Stop the consumer gracefully
      */
     public void stop() {
         logger.info("[{}] Stopping consumer...", workerId);

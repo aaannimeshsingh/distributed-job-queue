@@ -29,19 +29,19 @@ public class Main {
         emailJob.addProperty("recipient", "user@example.com");
         emailJob.addProperty("subject", "Welcome!");
         emailJob.addProperty("body", "Thanks for signing up!");
-        Long job1 = producer.submitJob(emailJob, 10); // High priority
+        producer.submitJob(emailJob, 10); // High priority
         
         // Job 2: Process data
         JsonObject dataJob = new JsonObject();
         dataJob.addProperty("type", "process_data");
         dataJob.addProperty("data", "User analytics for 2025");
-        Long job2 = producer.submitJob(dataJob, 5); // Medium priority
+        producer.submitJob(dataJob, 5); // Medium priority
         
         // Job 3: Generate report
         JsonObject reportJob = new JsonObject();
         reportJob.addProperty("type", "generate_report");
         reportJob.addProperty("reportName", "Q1 Sales Report");
-        Long job3 = producer.submitJob(reportJob, 1); // Low priority
+        producer.submitJob(reportJob, 1); // Low priority
 
         logger.info("Submitted {} jobs", 3);
         logger.info("Pending jobs: {}", producer.getPendingJobCount());
@@ -50,7 +50,12 @@ public class Main {
         logger.info("\n=== Starting Consumer ===");
         JobConsumer consumer = new JobConsumer("Worker-1");
         
-        Thread consumerThread = new Thread(() -> consumer.start());
+        Thread consumerThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                consumer.start();
+            }
+        });
         consumerThread.start();
 
         // Let it run for 15 seconds
