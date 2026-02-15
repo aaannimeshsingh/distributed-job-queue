@@ -16,38 +16,48 @@ public class DatabaseManager {
         try {
             HikariConfig config = new HikariConfig();
             
-            String databaseUrl = System.getenv("DATABASE_URL");
+            // Try JDBC_DATABASE_URL first (pre-formatted)
+            String jdbcUrl = System.getenv("JDBC_DATABASE_URL");
             
-            if (databaseUrl != null && !databaseUrl.isEmpty()) {
-                logger.info("🔧 Raw DATABASE_URL detected: {}", databaseUrl.substring(0, Math.min(20, databaseUrl.length())) + "...");
-                
-                // Convert postgresql:// to jdbc:postgresql://
-                if (databaseUrl.startsWith("postgresql://")) {
-                    String remainder = databaseUrl.substring("postgresql://".length());
-                    databaseUrl = "jdbc:postgresql://" + remainder;
-                    logger.info("✅ Converted to JDBC format");
-                } else if (databaseUrl.startsWith("postgres://")) {
-                    String remainder = databaseUrl.substring("postgres://".length());
-                    databaseUrl = "jdbc:postgresql://" + remainder;
-                    logger.info("✅ Converted postgres:// to JDBC format");
-                } else if (!databaseUrl.startsWith("jdbc:")) {
-                    databaseUrl = "jdbc:" + databaseUrl;
-                    logger.info("✅ Added jdbc: prefix");
-                }
-                
-                logger.info("🎯 Final JDBC URL: {}", databaseUrl.substring(0, Math.min(30, databaseUrl.length())) + "...");
-                config.setJdbcUrl(databaseUrl);
-                
+            if (jdbcUrl != null && !jdbcUrl.isEmpty()) {
+                logger.info("✅ Using JDBC_DATABASE_URL directly");
+                config.setJdbcUrl(jdbcUrl);
             } else {
-                logger.info("📍 Using localhost for development");
-                String dbUrl = System.getenv().getOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/jobqueue");
-                String dbUser = System.getenv().getOrDefault("DB_USER", "animeshsingh");
-                String dbPassword = System.getenv().getOrDefault("DB_PASSWORD", "");
+                // Fallback to DATABASE_URL with conversion
+                String databaseUrl = System.getenv("DATABASE_URL");
                 
-                config.setJdbcUrl(dbUrl);
-                config.setUsername(dbUser);
-                config.setPassword(dbPassword);
+                if (databaseUrl != null && !databaseUrl.isEmpty()) {
+                    logger.info("🔧 Converting DATABASE_URL to JDBC format");
+                    
+                    // Add full hostname if missing
+                    if (databaseUrl.contains("dpg-") && !databaseUrl.contains(".render.com")) {
+                        databaseUrl = databaseUrl.replace("@dpg-", "@dpg-");
+                        databaseUrl = databaseUrl.replaceFirst("@([^/]+)", "@$1.oregon-postgres.render.com");
+                        logger.info("✅ Added full hostname");
+                    }
+                    
+                    // Convert to JDBC format
+                    if (databaseUrl.startsWith("postgresql://")) {
+                        jdbcUrl = "jdbc:postgresql://" + databaseUrl.substring("postgresql://".length());
+                    } else if (databaseUrl.startsWith("postgres://")) {
+                        jdbcUrl = "jdbc:postgresql://" + databaseUrl.substring("postgres://".length());
+                    } else {
+                        jdbcUrl = databaseUrl;
+                    }
+                    
+                    config.setJdbcUrl(jdbcUrl);
+                    logger.info("✅ Converted to JDBC format");
+                } else {
+                    // Local development
+                    logger.info("📍 Using localhost for development");
+                    jdbcUrl = "jdbc:postgresql://localhost:5432/jobqueue";
+                    config.setJdbcUrl(jdbcUrl);
+                    config.setUsername(System.getenv().getOrDefault("DB_USER", "animeshsingh"));
+                    config.setPassword(System.getenv().getOrDefault("DB_PASSWORD", ""));
+                }
             }
+            
+            logger.info("🎯 Final JDBC URL: " + jdbcUrl.substring(0, Math.min(50, jdbcUrl.length())) + "...");
             
             config.setMaximumPoolSize(10);
             config.setMinimumIdle(2);
