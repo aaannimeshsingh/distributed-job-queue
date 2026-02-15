@@ -15,7 +15,7 @@ public class DatabaseManager {
     // Database configuration
     private static final String DB_URL = "jdbc:postgresql://localhost:5432/jobqueue";
     private static final String DB_USER = "animeshsingh";  // Your Mac username
-    private static final String DB_PASSWORD = "";  // No password for local PostgreSQL on Mac
+    private static final String DB_PASSWORD = "Animesh#1234";  // No password for local PostgreSQL on Mac
 
     static {
         try {

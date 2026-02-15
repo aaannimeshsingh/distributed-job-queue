@@ -74,14 +74,17 @@
                 </configuration>
             </plugin>
 
-            <!-- Exec Plugin - FIXED: No hardcoded mainClass -->
+            <!-- Exec Plugin - For running with dependencies -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
+                <configuration>
+                    <mainClass>com.jobqueue.JobQueueAPI</mainClass>
+                </configuration>
             </plugin>
 
-            <!-- Shade Plugin - Create fat JAR -->
+            <!-- Shade Plugin - Create fat JAR with all dependencies -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
