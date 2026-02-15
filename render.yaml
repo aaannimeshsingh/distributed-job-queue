@@ -1,7 +1,6 @@
 services:
   - type: web
     name: job-queue-api
-    runtime: java
     buildCommand: mvn clean package
     startCommand: java -jar target/job-queue-api.jar
     envVars:
