@@ -38,6 +38,22 @@
             font-size: 1.2em;
             opacity: 0.9;
         }
+
+        .live-badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
         
         .dashboard {
             display: grid;
@@ -221,6 +237,11 @@
             margin: 5px 0;
         }
 
+        .footer a {
+            color: white;
+            text-decoration: underline;
+        }
+
         .connection-status {
             position: fixed;
             top: 20px;
@@ -253,6 +274,7 @@
         <div class="header">
             <h1>🚀 Distributed Job Queue System</h1>
             <p>Real-time monitoring dashboard</p>
+            <span class="live-badge">🌐 LIVE ON RENDER</span>
         </div>
         
         <div class="dashboard">
@@ -357,22 +379,22 @@
                     <textarea id="job-data" rows="4" placeholder='{"key": "value"}'>{}</textarea>
                 </div>
                 
-                <button type="submit" class="btn">Submit Job</button>
+                <button type="submit" class="btn">Submit Job to Live API</button>
             </form>
         </div>
         
         <div class="footer">
-            <p><strong>Distributed Job Queue System</strong> • PostgreSQL-backed • HikariCP Connection Pool</p>
-            <p>Features: Priority-based scheduling • SKIP LOCKED concurrency • Real-time metrics • Retry mechanism</p>
-            <p>Architecture: REST API • Worker Pool • Zero-contention queue processing</p>
+            <p><strong>Distributed Job Queue System</strong> by <a href="https://github.com/aaannimeshsingh" target="_blank">Animesh Singh</a></p>
+            <p>PostgreSQL • HikariCP • Priority Scheduling • SKIP LOCKED • Real-time Metrics</p>
+            <p><a href="https://github.com/aaannimeshsingh/distributed-job-queue" target="_blank">View on GitHub</a> | Deployed on Render.com</p>
         </div>
     </div>
     
     <div class="toast" id="toast"></div>
     
     <script>
-        // API Configuration
-        const API_BASE = 'http://localhost:8080';
+        // LIVE API URL - Update this to your Render URL
+        const API_BASE = 'https://job-queue-api.onrender.com';
         let isConnected = false;
         
         // Connection status indicator
@@ -381,10 +403,10 @@
             const statusEl = document.getElementById('connection-status');
             if (connected) {
                 statusEl.className = 'connection-status connected';
-                statusEl.textContent = '✓ Connected to API';
+                statusEl.textContent = '✓ Connected to Live API';
             } else {
                 statusEl.className = 'connection-status disconnected';
-                statusEl.textContent = '⚠️ API Server Offline';
+                statusEl.textContent = '⚠️ API Offline';
             }
         }
         
@@ -424,7 +446,7 @@
                 updateConnectionStatus(false);
                 
                 if (isConnected) {
-                    showToast('Lost connection to API server. Make sure it\'s running on port 8080.', 'error');
+                    showToast('Lost connection to API server. Retrying...', 'error');
                 }
             }
         }
@@ -457,14 +479,14 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showToast(`✓ Job submitted successfully! ID: ${result.jobId}`, 'success');
+                    showToast(`✓ Job submitted successfully to LIVE API! ID: ${result.jobId}`, 'success');
                     updateMetrics();
                 } else {
                     showToast('Failed to submit job', 'error');
                 }
             } catch (error) {
                 console.error('Error submitting job:', error);
-                showToast(`Error: ${error.message}. Is the API server running?`, 'error');
+                showToast(`Error: ${error.message}. Check if API is running.`, 'error');
             }
         });
         
@@ -475,7 +497,7 @@
             toast.className = `toast show ${type}`;
             setTimeout(() => {
                 toast.classList.remove('show');
-            }, 4000);
+            }, 5000);
         }
         
         // Update job type field with relevant data
@@ -493,14 +515,14 @@
         
         // Initial load and auto-refresh every 2 seconds
         console.log('Dashboard initializing...');
-        console.log('API Base URL:', API_BASE);
+        console.log('Live API Base URL:', API_BASE);
         updateMetrics();
         setInterval(updateMetrics, 2000);
         
-        // Show initial connection attempt
+        // Show initial connection status
         setTimeout(() => {
             if (!isConnected) {
-                showToast('⚠️ Cannot connect to API server. Please start it with: ./run-api.sh', 'error');
+                showToast('⚠️ Cannot connect to API. Please check if it\'s running.', 'error');
             }
         }, 3000);
     </script>
