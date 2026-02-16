@@ -1,14 +1,23 @@
 services:
+  # API Service
   - type: web
     name: job-queue-api
     runtime: docker
     plan: free
     healthCheckPath: /health
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: jobqueue-db
-          property: connectionString
+      - key: JDBC_DATABASE_URL
+        value: jdbc:postgresql://jobqueue:uPxgQxQ57d3ksksqpTm6CSi7HHEAXr05@dpg-d68oq7ogjchc73cd3ck0-a.oregon-postgres.render.com/jobqueue_k8me
+
+  # Worker Service (Background)
+  - type: worker
+    name: job-queue-workers
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile.workers
+    envVars:
+      - key: JDBC_DATABASE_URL
+        value: jdbc:postgresql://jobqueue:uPxgQxQ57d3ksksqpTm6CSi7HHEAXr05@dpg-d68oq7ogjchc73cd3ck0-a.oregon-postgres.render.com/jobqueue_k8me
 
 databases:
   - name: jobqueue-db
