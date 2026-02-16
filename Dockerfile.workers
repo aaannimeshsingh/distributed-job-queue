@@ -2,7 +2,7 @@
 FROM maven:3.9-eclipse-temurin-17 AS builder
 WORKDIR /app
 
-# Copy pom.xml and download dependencies first (better caching)
+# Copy pom.xml and download dependencies
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
 
@@ -14,11 +14,9 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-# Copy the JAR with dependencies
+# Copy the fat JAR (created by maven-shade-plugin)
 COPY --from=builder /app/target/job-queue-api.jar app.jar
 
-# Verify JAR contains PostgreSQL driver
-RUN jar tf app.jar | grep postgresql || echo "WARNING: PostgreSQL driver not found!"
-
-# Run workers
+# Run workers by specifying the main class
+# Since the JAR has JobQueueAPI as main, we override it
 CMD ["java", "-cp", "app.jar", "com.jobqueue.StandaloneWorkers"]
