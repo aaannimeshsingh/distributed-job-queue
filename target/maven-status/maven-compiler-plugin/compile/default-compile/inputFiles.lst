@@ -10,4 +10,5 @@
 /Users/animeshsingh/distributed-job-queue/src/main/java/com/jobqueue/StandaloneWorkers.java
 /Users/animeshsingh/distributed-job-queue/src/main/java/com/jobqueue/DatabaseManager.java
 /Users/animeshsingh/distributed-job-queue/src/main/java/com/jobqueue/Job.java
+/Users/animeshsingh/distributed-job-queue/src/main/java/com/jobqueue/CorsEnabledHandler.java
 /Users/animeshsingh/distributed-job-queue/src/main/java/com/jobqueue/DomainDemos.java

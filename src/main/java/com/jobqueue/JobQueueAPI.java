@@ -1,10 +1,10 @@
 package com.jobqueue;
 
-import com.google.gson.JsonObject;
-import com.jobqueue.*;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpExchange;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,158 +12,180 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.Executors;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
-/**
- * REST API for Job Queue System
- * Provides HTTP endpoints for job submission and monitoring
- */
 public class JobQueueAPI {
     private static final Logger logger = LoggerFactory.getLogger(JobQueueAPI.class);
-    private static JobProducer producer;
-    private static JobMetrics metrics;
-    
+    private static final Gson gson = new Gson();
+    private static final int PORT = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
+    private static final long startTime = System.currentTimeMillis();
+
     public static void main(String[] args) throws IOException {
-        int port = 8080;
-        
-        // Initialize components
+
+        // Test database connection
         if (!DatabaseManager.testConnection()) {
-            logger.error("Database connection failed!");
+            logger.error("Failed to connect to database");
             System.exit(1);
         }
-        
-        producer = new JobProducer();
-        metrics = new JobMetrics();
-        
-        // Create HTTP server
-        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        
-        // Register endpoints with CORS support
-        server.createContext("/health", new CorsEnabledHandler(new HealthCheckHandler()));
+        logger.info("✅ Database connection successful");
+
+        // Start workers using JobConsumer
+        logger.info("🔧 Starting 3 background workers...");
+        for (int i = 1; i <= 3; i++) {
+            final int workerId = i;
+            Thread workerThread = new Thread(() -> {
+                try {
+                    JobConsumer consumer = new JobConsumer(String.valueOf(workerId));
+                    consumer.start();
+                } catch (Exception e) {
+                    logger.error("Worker-{} failed to start: {}", workerId, e.getMessage());
+                }
+            }, "Worker-" + i);
+            workerThread.setDaemon(true);
+            workerThread.start();
+            logger.info("✅ Started Worker-{}", i);
+        }
+
+        // Start HTTP server
+        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
+        server.createContext("/health",          new CorsEnabledHandler(new HealthHandler()));
         server.createContext("/api/jobs/submit", new CorsEnabledHandler(new SubmitJobHandler()));
-        server.createContext("/api/jobs/stats", new CorsEnabledHandler(new StatsHandler()));
-        server.createContext("/api/metrics", new CorsEnabledHandler(new MetricsHandler()));
-        
-        server.setExecutor(Executors.newFixedThreadPool(10));
+        server.createContext("/api/jobs/stats",  new CorsEnabledHandler(new StatsHandler()));
+        server.createContext("/api/metrics",     new CorsEnabledHandler(new MetricsHandler()));
+        server.setExecutor(null);
         server.start();
-        
-        logger.info("🚀 Job Queue API started on port {}", port);
+
+        logger.info("🚀 Job Queue API started on port {}", PORT);
         logger.info("📊 Endpoints:");
         logger.info("  - GET  /health              - Health check");
         logger.info("  - POST /api/jobs/submit     - Submit new job");
         logger.info("  - GET  /api/jobs/stats      - Database statistics");
         logger.info("  - GET  /api/metrics         - System metrics");
+        logger.info("👷 Background workers: 3 active");
     }
-    
-    // CORS wrapper handler
-    static class CorsEnabledHandler implements HttpHandler {
-        private final HttpHandler wrappedHandler;
-        
-        public CorsEnabledHandler(HttpHandler wrappedHandler) {
-            this.wrappedHandler = wrappedHandler;
-        }
-        
+
+    static class HealthHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            // Add CORS headers to all responses
-            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
-            
-            // Handle OPTIONS preflight request
-            if ("OPTIONS".equals(exchange.getRequestMethod())) {
-                exchange.sendResponseHeaders(204, -1);
-                return;
-            }
-            
-            // Delegate to wrapped handler
-            wrappedHandler.handle(exchange);
+            Map<String, String> response = new HashMap<>();
+            response.put("status", "healthy");
+            response.put("database", DatabaseManager.testConnection() ? "connected" : "disconnected");
+            sendJsonResponse(exchange, 200, response);
         }
     }
-    
-    // Health check endpoint
-    static class HealthCheckHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            String response = "{\"status\":\"healthy\",\"database\":\"" + 
-                (DatabaseManager.testConnection() ? "connected" : "disconnected") + 
-                "\"}";
-            sendResponse(exchange, 200, response);
-        }
-    }
-    
-    // Submit job endpoint
+
     static class SubmitJobHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if (!"POST".equals(exchange.getRequestMethod())) {
-                sendResponse(exchange, 405, "{\"error\":\"Method not allowed\"}");
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("error", "Method not allowed"));
                 return;
             }
-            
             try {
-                // Read request body
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-                JsonObject payload = com.google.gson.JsonParser.parseString(body).getAsJsonObject();
-                
-                // Get priority if specified
-                int priority = payload.has("priority") ? payload.get("priority").getAsInt() : 5;
-                
-                // Submit job
-                Long jobId = producer.submitJob(payload, priority);
-                
+                JsonObject jsonPayload = gson.fromJson(body, JsonObject.class);
+
+                // Build Job using the full constructor
+                int priority = jsonPayload.has("priority") ? jsonPayload.get("priority").getAsInt() : 5;
+                LocalDateTime now = LocalDateTime.now();
+                Job job = new Job(null, jsonPayload, "pending", priority, 0, 3, now, now, null, null, null);
+
+                JobProducer producer = new JobProducer();
+                Long jobId = producer.submitJob(job);
+
                 if (jobId != null) {
-                    String response = "{\"success\":true,\"jobId\":" + jobId + "}";
-                    sendResponse(exchange, 201, response);
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("success", true);
+                    response.put("jobId", jobId);
+                    sendJsonResponse(exchange, 200, response);
                 } else {
-                    sendResponse(exchange, 500, "{\"error\":\"Failed to submit job\"}");
+                    sendJsonResponse(exchange, 500, Map.of("success", false, "error", "Failed to submit job"));
                 }
             } catch (Exception e) {
                 logger.error("Error submitting job", e);
-                sendResponse(exchange, 400, "{\"error\":\"" + e.getMessage() + "\"}");
+                sendJsonResponse(exchange, 500, Map.of("success", false, "error", e.getMessage()));
             }
         }
     }
-    
-    // Database stats endpoint
+
     static class StatsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            JobMetrics.DatabaseStats stats = JobMetrics.getDatabaseStats();
-            
-            String response = String.format(
-                "{\"total\":%d,\"completed\":%d,\"failed\":%d,\"pending\":%d,\"processing\":%d,\"avgDuration\":%.2f}",
-                stats.total, stats.completed, stats.failed, stats.pending, stats.processing, stats.avgDuration
-            );
-            
-            sendResponse(exchange, 200, response);
+            try {
+                Map<String, Object> stats = getJobStats();
+                sendJsonResponse(exchange, 200, stats);
+            } catch (Exception e) {
+                logger.error("Error getting stats", e);
+                sendJsonResponse(exchange, 500, Map.of("error", e.getMessage()));
+            }
         }
     }
-    
-    // System metrics endpoint
+
     static class MetricsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            String response = String.format(
-                "{\"jobsProcessed\":%d,\"jobsSucceeded\":%d,\"jobsFailed\":%d,\"successRate\":%.2f,\"throughput\":%.2f,\"uptimeSeconds\":%d}",
-                metrics.getJobsProcessed(),
-                metrics.getJobsSucceeded(),
-                metrics.getJobsFailed(),
-                metrics.getSuccessRate(),
-                metrics.getJobsPerSecond(),
-                metrics.getUptimeSeconds()
-            );
-            
-            sendResponse(exchange, 200, response);
+            try {
+                long uptime = (System.currentTimeMillis() - startTime) / 1000;
+                Map<String, Object> stats = getJobStats();
+
+                int completed = ((Number) stats.get("completed")).intValue();
+                int failed    = ((Number) stats.get("failed")).intValue();
+                int total     = completed + failed;
+
+                double successRate = total > 0 ? (completed * 100.0 / total) : 0.0;
+                double throughput  = uptime > 0 ? (completed / (double) uptime) : 0.0;
+
+                Map<String, Object> metrics = new HashMap<>();
+                metrics.put("jobsProcessed", completed);
+                metrics.put("successRate", successRate);
+                metrics.put("throughput", throughput);
+                metrics.put("uptimeSeconds", uptime);
+                sendJsonResponse(exchange, 200, metrics);
+            } catch (Exception e) {
+                logger.error("Error getting metrics", e);
+                sendJsonResponse(exchange, 500, Map.of("error", e.getMessage()));
+            }
         }
     }
-    
-    private static void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(statusCode, response.getBytes().length);
-        
+
+    private static Map<String, Object> getJobStats() throws SQLException {
+        String sql = "SELECT status, COUNT(*) as count FROM jobs GROUP BY status";
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("pending", 0);
+        stats.put("processing", 0);
+        stats.put("completed", 0);
+        stats.put("failed", 0);
+        stats.put("total", 0);
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            int total = 0;
+            while (rs.next()) {
+                String status = rs.getString("status");
+                int count = rs.getInt("count");
+                stats.put(status, count);
+                total += count;
+            }
+            stats.put("total", total);
+        }
+        return stats;
+    }
+
+    static void sendJsonResponse(HttpExchange exchange, int statusCode, Object data) throws IOException {
+        String json = gson.toJson(data);
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(statusCode, bytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
-            os.write(response.getBytes(StandardCharsets.UTF_8));
+            os.write(bytes);
         }
     }
 }

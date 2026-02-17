@@ -20,9 +20,6 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.1.0</version>
-        <configuration>
-          <mainClass>com.jobqueue.api.JobQueueAPI</mainClass>
-        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
@@ -36,7 +33,7 @@
             <configuration>
               <transformers>
                 <transformer>
-                  <mainClass>com.jobqueue.api.JobQueueAPI</mainClass>
+                  <mainClass>com.jobqueue.JobQueueAPI</mainClass>
                 </transformer>
               </transformers>
               <finalName>job-queue-api</finalName>

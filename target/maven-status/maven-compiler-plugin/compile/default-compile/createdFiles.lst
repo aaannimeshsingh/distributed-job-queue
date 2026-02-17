@@ -4,7 +4,6 @@ com/jobqueue/JobConsumer$1.class
 com/jobqueue/JobMetrics$DatabaseStats.class
 com/jobqueue/DatabaseManager.class
 com/jobqueue/StandaloneWorkers.class
-com/jobqueue/JobQueueAPI$CorsEnabledHandler.class
 com/jobqueue/JobQueueAPI$StatsHandler.class
 com/jobqueue/JobType$JobDomain.class
 com/jobqueue/JobQueueAPI.class
@@ -13,10 +12,11 @@ com/jobqueue/JobQueueAPI$SubmitJobHandler.class
 com/jobqueue/JobConsumer.class
 com/jobqueue/Main$1.class
 com/jobqueue/DomainDemos.class
-com/jobqueue/JobQueueAPI$HealthCheckHandler.class
 com/jobqueue/JobType.class
+com/jobqueue/JobQueueAPI$HealthHandler.class
 com/jobqueue/DomainJobProcessors.class
 com/jobqueue/LoadTestDemo.class
 com/jobqueue/Main.class
 com/jobqueue/Job.class
 com/jobqueue/JobMetrics.class
+com/jobqueue/CorsEnabledHandler.class
